@@ -1,5 +1,5 @@
 import numpy as np
-from Network import Network
+from src.Network import Network
 from network_setup import shape_network
 import random
 
@@ -10,7 +10,7 @@ def create_input_output_pairs(n: int) -> list[tuple[tuple, tuple]]:
     """
 
     pairs = []
-    for _ in range(1000):  # Generate 1000 random pairs
+    for _ in range(n):
         numbers = [random.random()*2-1 for _ in range(3)]
         a = [tuple(numbers)]
 
@@ -32,10 +32,10 @@ def main():
     net = Network(*shape_network(3, 5, 5, 5, 3))
     # net = Network.from_json("network.json")
 
-    pairs = create_input_output_pairs(50)
+    pairs = create_input_output_pairs(1000)
 
     net.train(pairs, iterations=300, mode="constant")
-    net.save("network.json")
+    net.save("networks/network2.json")
 
     print("Some Tests:")
     print(net.predict(*[(random.random() * 2 - 1, random.random() * 2 - 1, random.random() * 2 - 1) for _ in range(10)]))
