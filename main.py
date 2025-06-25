@@ -29,16 +29,22 @@ def main():
     Hidden: 
     Output: 3 (confidence that number is the biggest among the three)
     """
-    net = Network(*shape_network(3, 5, 5, 5, 3))
-    # net = Network.from_json("network.json")
+    # net = Network(*shape_network(3, 3, 3))
+    net = Network.from_json("networks/network3.json")
 
-    pairs = create_input_output_pairs(1000)
+    pairs = create_input_output_pairs(10_000)
 
-    net.train(pairs, iterations=300, mode="constant")
-    net.save("networks/network2.json")
+    net.train(pairs, batch_size=200, epochs=5000, mode="default")
+    net.save("networks/network3.json")
 
-    print("Some Tests:")
-    print(net.predict(*[(random.random() * 2 - 1, random.random() * 2 - 1, random.random() * 2 - 1) for _ in range(10)]))
+    # print("Some Tests:")
+    # print(net.predict(*[(random.random() * 2 - 1, random.random() * 2 - 1, random.random() * 2 - 1) for _ in range(10)]))
+    # print("Precise Tests:")
+    # print(net.predict((0.9, 0.91, 0.92), (-0.99, -0.98, -0.97), (0.0001, 0.0002, 0.00021), (0., -1.0, 1.0), simplify=False))
+
+    # print("\nTesting accuracy:")
+    # pairs = create_input_output_pairs(10_000)
+    # print(net.test_accuracy(pairs))
 
 if __name__ == "__main__":
     main()

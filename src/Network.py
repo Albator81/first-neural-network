@@ -7,6 +7,7 @@ import json
 from src.activation.functions import sigmoid_act, relu_act, softmax_act
 from src.cost.functions import cross_entropy_softmax_cost
 from src.cost.Cost import Cost
+from src.statistics import EpochStatistics
 
 
 def get(x, y):
@@ -29,7 +30,9 @@ class LR_Schedule:
         return self.func(cost)
 
 constant_lr = LR_Schedule(lambda c: 0.01, "constant")
-default_lr  = LR_Schedule(lambda c: 0.03*(1-np.exp(-c)), "default")
+default_lr  = LR_Schedule(lambda c: 0.01   if c > 0.1   else 
+                                   (0.001  if c > 0.03  else 
+                                   (0.0003 if c > 0.009 else 0.00007)), "default")
 high_lr    = LR_Schedule(lambda c: 0.08*(1-np.exp(-4*c)), "high")
 
 
@@ -112,48 +115,47 @@ class Network:
     def get_cost(self, target: NDArray):
         return self.cost.get_cost(self.lA[self.L - 1], target)
 
-    def train(self, input_output_pairs: list[tuple[tuple, tuple]], iterations: int, mode: str = "default"):
+    def train(self, input_output_pairs: list[tuple[tuple, tuple]], batch_size: int, epochs: int, mode: str = "default"):
         rate_func = LR_Schedule.schedules.get(mode, constant_lr)
 
         print(f"Training with Mode: {rate_func.name}")
-        print(f"Iterations: {iterations}, Batch Size: {len(input_output_pairs)}")
+        print(f"Epochs: {epochs}, Batch Size: {batch_size}, Dataset Size: {len(input_output_pairs)}\n")
 
-        batch_size = len(input_output_pairs)
-        width = len(str(iterations))
+        width = len(str(epochs))
 
-        sum_cost = 0.0
-        correct = 0
-        for i in range(iterations):
-            sum_cost = 0.0
-            correct = 0
+        stats = EpochStatistics()
 
-            # random.shuffle(input_output_pairs)
+        for i in range(epochs):
+            batch = random.sample(input_output_pairs, batch_size)
 
-            for input_, target in input_output_pairs:
-                self.set_input(*input_)
+            for input_, target in batch:
+                input_ = np.array(input_, ndmin=2).T
                 target = np.array(target, ndmin=2).T
 
+                self.lA[0] = input_
                 self.forward()
                 output = self.lA[self.L - 1]
 
-                if np.argmax(output) == np.argmax(target):
-                    correct += 1
+                is_correct = np.argmax(output) == np.argmax(target)
 
                 cost_value = self.get_cost(target)
-                sum_cost += cost_value
-                self.backpropagate(target, rate_func(cost_value))
+                lr = rate_func(cost_value)
+                self.backpropagate(target, lr)
 
-            if i % 100 == 0:
-                avg_cost = sum_cost / batch_size
-                accuracy = correct / batch_size
-                print(f"Iteration {i:<{width}}, Average Cost: {avg_cost:.6f}, Accuracy: {accuracy:.2%}")
+                stats.update(input_, output, target, is_correct, cost_value, lr)
 
-        final_cost = sum_cost / batch_size
-        final_accuracy = correct / batch_size
+            # feedback to user 20 times in total
+            if i % (epochs // 20) == 0 or i == epochs - 1:
+                print(f"Epochs {i:<{width}}", 
+                      stats.avg_cost_labeled(), 
+                      stats.accuracy_labeled(), stats.n_correct_labeled(), 
+                      stats.l_incorrect_in_out_labeled(' || '), 
+                      sep=', ')
+
+            # new epoch
+            stats.new_epoch()
 
         print("\nTraining completed.\n")
-        print(f"Final Cost: {final_cost:.6f}")
-        print(f"Final Accuracy: {final_accuracy:.2%}\n")
 
     def predict(self, *inputs: tuple, simplify=True):
         s = ""
@@ -166,6 +168,23 @@ class Network:
                 output = [round(o, 3) for o in output]
             s += f"In: {input_} Out: {output}\n"
         return s
+    
+    def test_accuracy(self, input_output_pairs: list[tuple[tuple, tuple]]) -> str:
+        """Test the accuracy of the network on a set of input-output pairs.
+        A correct prediction is when the index of the maximum output matches the index of the maximum target value."""
+        correct = 0
+        total = len(input_output_pairs)
+
+        for input_, target in input_output_pairs:
+            self.set_input(*input_)
+            self.forward()
+            output = self.lA[self.L - 1]
+
+            if np.argmax(output) == np.argmax(target):
+                correct += 1
+
+        accuracy = correct / total if total > 0 else 0
+        return f"Accuracy: {accuracy:.2%} ({correct}/{total})"
 
     def save(self, filename: str):
         data = {
